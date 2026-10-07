@@ -1,0 +1,61 @@
+# Descarga los datos de radiación (solo la primera vez o los que falten), construye y publica en GitHub Pages.
+name: Construir y publicar
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Descargar radiación de PVGIS (solo lo que falte)
+        run: node scripts/fetch-radiation.js
+      - name: Guardar los datos en el repositorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +%F > .last-build
+          git add -f data/radiation.json .last-build
+          git commit -m "Datos de radiación y reconstrucción [skip ci]" || exit 0
+          git push
+      - name: Construir
+        run: node build.js
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          BASE_PATH: ${{ vars.BASE_PATH }}
+          ADSENSE_CLIENT: ${{ vars.ADSENSE_CLIENT }}
+          CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          GOOGLE_VERIFICATION: ${{ vars.GOOGLE_VERIFICATION }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

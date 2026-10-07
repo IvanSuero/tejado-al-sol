@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.cache/
+# Los datos reales los descarga y guarda GitHub Actions (con git add -f)
+data/radiation.json
